@@ -1,7 +1,14 @@
 {
-  "name": "claude-usage-overlay",
+  "name": "hyalos",
   "version": "0.1.0",
-  "description": "Always-on-top floating overlay showing Claude Code usage stats",
+  "description": "A glass overlay for Claude Code usage — by Earthling Aid Tech",
+  "author": "Earthling Aid Tech <avinrique>",
+  "license": "MIT",
+  "homepage": "https://github.com/avinrique/hyalos",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avinrique/hyalos"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,8 +18,8 @@
     "build:all": "electron-builder --mac --win --linux"
   },
   "build": {
-    "appId": "com.claudeusage.overlay",
-    "productName": "Claude Usage Overlay",
+    "appId": "com.earthlingaid.hyalos",
+    "productName": "Hyalos",
     "files": [
       "main.js",
       "preload.js",

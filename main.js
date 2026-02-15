@@ -296,7 +296,7 @@ function createWindow() {
 
 function createTray() {
   tray = new Tray(path.join(__dirname, 'assets', 'tray-icon.png'));
-  tray.setToolTip('Claude Usage Overlay');
+  tray.setToolTip('Hyalos — Usage Glass');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show/Hide', click: () => mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show() },
     { label: 'Refresh', click: () => refreshUsage() },
