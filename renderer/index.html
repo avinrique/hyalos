@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Usage</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="card">
+    <!-- === COLLAPSED VIEW (always visible) === -->
+    <div class="collapsed-view" id="collapsed-view">
+      <div class="collapsed-left" id="titlebar">
+        <div class="collapsed-info">
+          <div class="collapsed-top-row">
+            <span class="collapsed-label">Session</span>
+            <span class="collapsed-model" id="c-model"></span>
+            <span class="c-reset" id="c-session-reset"></span>
+          </div>
+          <div class="collapsed-bar-row">
+            <div class="c-progress-bar">
+              <div class="c-progress-fill" id="c-session-bar"></div>
+            </div>
+            <span class="c-pct" id="c-session-pct">0%</span>
+          </div>
+        </div>
+      </div>
+      <div class="collapsed-right">
+        <button class="btn-icon" id="btn-expand" title="Expand">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <button class="btn-icon btn-close" id="btn-close" title="Hide">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- === EXPANDED VIEW === -->
+    <div class="expanded-view" id="expanded-view" style="display:flex;">
+      <div class="content">
+
+        <!-- Current Session -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Session</span>
+            <span class="section-sub" id="session-duration"></span>
+          </div>
+          <div class="limit-row compact">
+            <div class="limit-info">
+              <span class="limit-name">Usage</span>
+              <span class="limit-sub" id="session-reset-text"></span>
+            </div>
+            <div class="limit-bar-area">
+              <div class="limit-bar"><div class="limit-fill" id="session-bar-expanded"></div></div>
+              <span class="limit-pct" id="session-pct-expanded">0%</span>
+            </div>
+          </div>
+          <div class="stat-row three-col">
+            <div class="stat-mini"><span class="stat-mini-label">Msgs</span><span class="stat-mini-value" id="session-messages">0</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Tools</span><span class="stat-mini-value" id="session-tools">0</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Tokens</span><span class="stat-mini-value" id="session-tokens">0</span></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Weekly Limits -->
+        <div class="section" id="weekly-limits-section" style="display:none;">
+          <div class="section-header"><span class="section-title">Weekly Limits</span></div>
+          <div class="limit-row compact">
+            <div class="limit-info"><span class="limit-name">All models</span><span class="limit-sub" id="week-all-reset"></span></div>
+            <div class="limit-bar-area"><div class="limit-bar"><div class="limit-fill" id="week-all-bar"></div></div><span class="limit-pct" id="week-all-pct">0%</span></div>
+          </div>
+          <div class="limit-row compact" id="week-sonnet-row" style="display:none;">
+            <div class="limit-info"><span class="limit-name">Sonnet only</span><span class="limit-sub" id="week-sonnet-reset"></span></div>
+            <div class="limit-bar-area"><div class="limit-bar"><div class="limit-fill" id="week-sonnet-bar"></div></div><span class="limit-pct" id="week-sonnet-pct">0%</span></div>
+          </div>
+          <div class="limit-row compact" id="extra-row" style="display:none;">
+            <div class="limit-info"><span class="limit-name">Extra usage</span><span class="limit-sub" id="extra-spent"></span></div>
+            <div class="limit-bar-area"><div class="limit-bar"><div class="limit-fill" id="extra-bar"></div></div><span class="limit-pct" id="extra-pct">0%</span></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Activity -->
+        <div class="section">
+          <div class="section-header">
+            <div class="period-selector" id="period-selector">
+              <span class="period-option active" data-period="today">Today</span>
+              <span class="period-option" data-period="week">Week</span>
+              <span class="period-option" data-period="alltime">All</span>
+            </div>
+            <span class="section-sub" id="period-sub"></span>
+          </div>
+          <div class="week-chart" id="week-chart" style="display:none;">
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-0"></div></div><span class="chart-day">M</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-1"></div></div><span class="chart-day">T</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-2"></div></div><span class="chart-day">W</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-3"></div></div><span class="chart-day">T</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-4"></div></div><span class="chart-day">F</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-5"></div></div><span class="chart-day">S</span></div>
+            <div class="chart-bar-col"><div class="chart-bar-wrapper"><div class="chart-bar" id="bar-6"></div></div><span class="chart-day">S</span></div>
+          </div>
+          <div class="chart-tooltip" id="chart-tooltip"></div>
+          <div class="stat-row three-col">
+            <div class="stat-mini"><span class="stat-mini-label">Msgs</span><span class="stat-mini-value" id="activity-messages">0</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Tools</span><span class="stat-mini-value" id="activity-tools">0</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Tokens</span><span class="stat-mini-value" id="activity-tokens">0</span></div>
+          </div>
+          <div class="stat-row-extra" id="activity-extra"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- System -->
+        <div class="section">
+          <div class="section-header"><span class="section-title">System</span></div>
+          <div class="stat-row three-col">
+            <div class="stat-mini"><span class="stat-mini-label">CPU</span><span class="stat-mini-value" id="sys-cpu">0%</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Memory</span><span class="stat-mini-value" id="sys-mem">0%</span></div>
+            <div class="stat-mini"><span class="stat-mini-label">Used</span><span class="stat-mini-value" id="sys-mem-detail">-</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <span class="footer-text" id="last-updated"></span>
+        <div class="footer-btns">
+          <button class="btn-theme" id="btn-theme" title="Switch theme">DARK</button>
+          <button class="btn-icon btn-small" id="btn-pin" title="Pin on top">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2v10M12 22v-6M5 12h14M8 6l4-4 4 4M8 18l4 4 4-4"/>
+            </svg>
+          </button>
+          <button class="btn-icon btn-small" id="btn-refresh" title="Refresh">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
