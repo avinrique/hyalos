@@ -24,6 +24,58 @@ body {
   overflow: hidden;
 }
 
+/* ============ INPUT NOTIFICATION ============ */
+.input-notify {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(234, 179, 8, 0.15);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+  animation: notify-pulse 2s ease-in-out infinite;
+}
+
+@keyframes notify-pulse {
+  0%, 100% { background: rgba(234, 179, 8, 0.12); }
+  50% { background: rgba(234, 179, 8, 0.22); }
+}
+
+.input-notify-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #eab308;
+  flex-shrink: 0;
+  animation: dot-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.input-notify-text {
+  font-size: 8px;
+  font-weight: 600;
+  color: #eab308;
+}
+
+/* Light theme */
+.card.theme-light .input-notify {
+  background: rgba(202, 138, 4, 0.1);
+  border-bottom-color: rgba(202, 138, 4, 0.2);
+}
+.card.theme-light .input-notify-text { color: #a16207; }
+.card.theme-light .input-notify-dot { background: #a16207; }
+
+/* Night theme */
+.card.theme-night .input-notify {
+  background: rgba(234, 179, 8, 0.08);
+  border-bottom-color: rgba(234, 179, 8, 0.15);
+}
+.card.theme-night .input-notify-text { color: #ca8a04; }
+.card.theme-night .input-notify-dot { background: #ca8a04; }
+
 /* ============ COLLAPSED VIEW ============ */
 .collapsed-view {
   display: flex;

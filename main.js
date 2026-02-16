@@ -276,17 +276,23 @@ function getCurrentSessionData() {
   const filePath = findLatestSessionFile();
   if (!filePath) return null;
   try {
+    const fileStat = fs.statSync(filePath);
+    const fileAge = Date.now() - fileStat.mtimeMs;
     const lines = fs.readFileSync(filePath, 'utf-8').trim().split('\n');
     let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheWrite = 0;
     let assistantMessages = 0, userMessages = 0, toolCalls = 0;
     let firstTimestamp = null, lastTimestamp = null, model = null;
+    let lastMessageType = null;
+    // Track pending tool_use IDs that haven't received results yet
+    let pendingToolIds = new Set();
 
     for (const line of lines) {
       try {
         const d = JSON.parse(line);
         if (d.timestamp && !firstTimestamp) firstTimestamp = d.timestamp;
         if (d.timestamp) lastTimestamp = d.timestamp;
-        if (d.type === 'user') userMessages++;
+        if (d.type === 'user') { userMessages++; pendingToolIds.clear(); }
+        if (d.type) lastMessageType = d.type;
         const msg = d.message || {};
         if (msg.usage) {
           totalInput += msg.usage.input_tokens || 0;
@@ -298,14 +304,28 @@ function getCurrentSessionData() {
         if (msg.model) model = msg.model;
         if (Array.isArray(msg.content)) {
           for (const block of msg.content) {
-            if (block.type === 'tool_use') toolCalls++;
+            if (block.type === 'tool_use') { toolCalls++; pendingToolIds.add(block.id); }
+            if (block.type === 'tool_result') pendingToolIds.delete(block.tool_use_id);
           }
         }
+        // Also check top-level tool_result (some formats put it at message level)
+        if (d.type === 'result' && d.tool_use_id) pendingToolIds.delete(d.tool_use_id);
+        if (msg.type === 'tool_result' && msg.tool_use_id) pendingToolIds.delete(msg.tool_use_id);
       } catch (e) {}
     }
+
+    const hasPendingTools = pendingToolIds.size > 0;
+    // Waiting for input: last message is assistant + file idle 3s+
+    // Waiting for tool approval: there are unresolved tool_use calls + file idle 3s+
+    const waitingForInput = fileAge > 3000 && (lastMessageType === 'assistant' || hasPendingTools);
+    const waitingReason = waitingForInput
+      ? (hasPendingTools ? 'Tool confirmation needed' : 'Waiting for your input')
+      : null;
+
     return { inputTokens: totalInput, outputTokens: totalOutput,
       cacheReadTokens: totalCacheRead, cacheWriteTokens: totalCacheWrite,
-      assistantMessages, userMessages, toolCalls, firstTimestamp, lastTimestamp, model };
+      assistantMessages, userMessages, toolCalls, firstTimestamp, lastTimestamp, model,
+      waitingForInput, waitingReason };
   } catch (err) {
     return null;
   }

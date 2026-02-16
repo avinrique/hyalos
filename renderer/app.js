@@ -240,6 +240,16 @@ function updateActivitySection() {
 function updateUI({ stats, session, usage, system }) {
   cachedData = { stats, session, usage };
 
+  // --- Input notification ---
+  const notifyEl = document.getElementById('input-notify');
+  const notifyText = document.getElementById('input-notify-text');
+  if (session?.waitingForInput) {
+    notifyEl.style.display = 'flex';
+    notifyText.textContent = session.waitingReason || 'Waiting for your input';
+  } else {
+    notifyEl.style.display = 'none';
+  }
+
   const hasRealUsage = usage && usage.sessionPct !== undefined;
 
   const pct = hasRealUsage ? usage.sessionPct : getSessionPct(session);
