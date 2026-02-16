@@ -360,6 +360,82 @@ document.getElementById('btn-theme').addEventListener('click', () => {
   applyTheme(themes[idx]);
 });
 
+// ============ USER MENU DROPDOWN ============
+const userBtn = document.getElementById('btn-user');
+const userDropdown = document.getElementById('user-dropdown');
+const dropdownUserInfo = document.getElementById('dropdown-user-info');
+const dropdownTeams = document.getElementById('dropdown-teams');
+const dropdownAdmin = document.getElementById('dropdown-admin');
+let userMenuOpen = false;
+
+userBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  userMenuOpen = !userMenuOpen;
+  userDropdown.classList.toggle('open', userMenuOpen);
+  if (userMenuOpen) loadUserMenu();
+});
+
+document.addEventListener('click', () => {
+  if (userMenuOpen) {
+    userMenuOpen = false;
+    userDropdown.classList.remove('open');
+  }
+});
+
+userDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+async function loadUserMenu() {
+  const auth = await window.electronAPI.getAuthState();
+  if (auth.user) {
+    dropdownUserInfo.textContent = auth.user.name || auth.user.email;
+  }
+  try {
+    const teams = await window.electronAPI.getMyTeams();
+    if (teams.length > 0) {
+      dropdownTeams.innerHTML = teams.map((t) =>
+        `<div class="dropdown-team-item">${escapeHtmlAttr(t.name)} <span class="team-role">${t.role}</span></div>`
+      ).join('');
+      const isAdmin = teams.some((t) => t.role === 'admin');
+      dropdownAdmin.style.display = isAdmin ? 'block' : 'none';
+    } else {
+      dropdownTeams.innerHTML = '<div class="dropdown-team-empty">No teams yet</div>';
+      dropdownAdmin.style.display = 'none';
+    }
+  } catch {
+    dropdownTeams.innerHTML = '';
+  }
+}
+
+function escapeHtmlAttr(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+document.getElementById('dropdown-logout').addEventListener('click', () => {
+  window.electronAPI.logout();
+});
+
+document.getElementById('dropdown-admin').addEventListener('click', () => {
+  window.electronAPI.openAdmin();
+  userMenuOpen = false;
+  userDropdown.classList.remove('open');
+});
+
+document.getElementById('dropdown-create-team').addEventListener('click', async () => {
+  const name = prompt('Team name:');
+  if (!name) return;
+  const res = await window.electronAPI.createTeam(name);
+  if (res.error) alert(res.error);
+  else loadUserMenu();
+});
+
+document.getElementById('dropdown-join-team').addEventListener('click', async () => {
+  const code = prompt('Enter invite code:');
+  if (!code) return;
+  const res = await window.electronAPI.joinTeam(code);
+  if (res.error) alert(res.error);
+  else loadUserMenu();
+});
+
 // ============ GHOST MODE ============
 window.electronAPI.onGhostMode((active) => {
   document.querySelector('.card').classList.toggle('ghost-mode', active);

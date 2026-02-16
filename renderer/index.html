@@ -133,6 +133,24 @@
       <div class="footer">
         <span class="footer-text" id="last-updated"></span>
         <div class="footer-btns">
+          <div class="user-menu-wrapper">
+            <button class="btn-icon btn-small" id="btn-user" title="Account">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </button>
+            <div class="user-dropdown" id="user-dropdown">
+              <div class="dropdown-user-info" id="dropdown-user-info"></div>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-teams" id="dropdown-teams"></div>
+              <button class="dropdown-item" id="dropdown-create-team">+ Create Team</button>
+              <button class="dropdown-item" id="dropdown-join-team">+ Join Team</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="dropdown-admin" style="display:none;">Admin Dashboard</button>
+              <button class="dropdown-item dropdown-logout" id="dropdown-logout">Logout</button>
+            </div>
+          </div>
           <button class="btn-theme" id="btn-theme" title="Switch theme">DARK</button>
           <button class="btn-icon btn-small" id="btn-pin" title="Pin on top">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">

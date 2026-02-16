@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyalos — Admin Dashboard</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="admin-container">
+    <header class="admin-header">
+      <div class="header-left">
+        <h1 class="team-name" id="team-name">Team</h1>
+        <span class="member-count" id="member-count"></span>
+      </div>
+      <div class="header-right">
+        <div class="invite-box">
+          <span class="invite-label">Invite Code:</span>
+          <code class="invite-code" id="invite-code"></code>
+          <button class="btn-copy" id="btn-copy" title="Copy invite code">Copy</button>
+        </div>
+        <select class="team-select" id="team-select"></select>
+      </div>
+    </header>
+
+    <div class="table-container">
+      <table class="members-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Session %</th>
+            <th>Week %</th>
+            <th>Tokens Today</th>
+            <th>Last Active</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody id="members-body">
+          <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="admin-footer">
+      <span id="last-refresh">—</span>
+      <span class="auto-refresh-note">Auto-refreshes every 30s</span>
+    </footer>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

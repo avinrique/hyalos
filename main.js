@@ -1,19 +1,103 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut, safeStorage } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const https = require('https');
+const http = require('http');
 
 let mainWindow;
+let authWindow;
+let adminWindow;
 let tray;
 let cachedUsage = null;
+let authToken = null;
+let currentUser = null;
 
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const STATS_PATH = path.join(CLAUDE_DIR, 'stats-cache.json');
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
+const AUTH_PATH = path.join(app.getPath('userData'), 'auth.dat');
+
+const API_BASE = 'http://localhost:3001';
 
 const COLLAPSED_HEIGHT = 40;
 const EXPANDED_HEIGHT = 340;
+
+// ============ HTTP HELPER ============
+
+function apiRequest(method, urlPath, body, token) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlPath, API_BASE);
+    const lib = url.protocol === 'https:' ? https : http;
+    const payload = body ? JSON.stringify(body) : null;
+
+    const req = lib.request(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+      },
+      timeout: 10000,
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { resolve({ error: 'Bad response' }); }
+      });
+    });
+
+    req.on('error', () => resolve({ error: 'Connection failed' }));
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'Request timeout' }); });
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+// ============ AUTH TOKEN STORAGE (safeStorage) ============
+
+function saveToken(token) {
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(token);
+      fs.writeFileSync(AUTH_PATH, encrypted);
+    } else {
+      fs.writeFileSync(AUTH_PATH, token, 'utf-8');
+    }
+  } catch { /* ignore */ }
+}
+
+function loadToken() {
+  try {
+    if (!fs.existsSync(AUTH_PATH)) return null;
+    const raw = fs.readFileSync(AUTH_PATH);
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(raw);
+    }
+    return raw.toString('utf-8');
+  } catch {
+    return null;
+  }
+}
+
+function clearToken() {
+  try { fs.unlinkSync(AUTH_PATH); } catch { /* ignore */ }
+  authToken = null;
+  currentUser = null;
+}
+
+// ============ AUTH VALIDATION ============
+
+async function validateToken(token) {
+  const res = await apiRequest('GET', '/auth/me', null, token);
+  if (res.user) {
+    authToken = token;
+    currentUser = res.user;
+    return true;
+  }
+  return false;
+}
 
 // ============ FETCH REAL USAGE VIA `claude /usage` ============
 
@@ -254,6 +338,40 @@ function getMemUsage() {
   return { usedPct: Math.round((used / total) * 100), usedGB: (used / 1e9).toFixed(1), totalGB: (total / 1e9).toFixed(1) };
 }
 
+// ============ CLOUD SYNC ============
+
+function buildSnapshot() {
+  const session = getCurrentSessionData();
+  const stats = getStatsData();
+  const today = new Date().toISOString().slice(0, 10);
+  const todayActivity = (stats?.dailyActivity || []).find((d) => d.date === today);
+
+  return {
+    sessionPct: cachedUsage?.sessionPct ?? null,
+    weekAllPct: cachedUsage?.weekAllPct ?? null,
+    weekSonnetPct: cachedUsage?.weekSonnetPct ?? null,
+    extraPct: cachedUsage?.extraPct ?? null,
+    sessionInputTokens: session?.inputTokens ?? 0,
+    sessionOutputTokens: session?.outputTokens ?? 0,
+    sessionCacheReadTokens: session?.cacheReadTokens ?? 0,
+    sessionCacheWriteTokens: session?.cacheWriteTokens ?? 0,
+    messages: session ? (session.userMessages + session.assistantMessages) : 0,
+    toolCalls: session?.toolCalls ?? 0,
+    model: session?.model ?? null,
+    totalSessions: stats?.totalSessions ?? 0,
+    totalMessages: stats?.totalMessages ?? 0,
+    todayMessages: todayActivity?.messageCount ?? 0,
+    estimatedCostUsd: 0,
+    lastActive: session?.lastTimestamp ?? null,
+  };
+}
+
+function syncToCloud() {
+  if (!authToken) return;
+  const snapshot = buildSnapshot();
+  apiRequest('POST', '/usage/sync', snapshot, authToken).catch(() => {});
+}
+
 // ============ SEND DATA TO RENDERER ============
 
 async function sendAllData() {
@@ -272,9 +390,11 @@ async function refreshUsage() {
   const usage = await fetchClaudeUsage();
   if (usage) cachedUsage = usage;
   sendAllData();
+  // Fire-and-forget cloud sync
+  syncToCloud();
 }
 
-// ============ WINDOW + TRAY ============
+// ============ WINDOWS ============
 
 function createWindow() {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
@@ -294,22 +414,81 @@ function createWindow() {
   mainWindow.on('moved', () => mainWindow.setOpacity(1.0));
 }
 
+function createAuthWindow() {
+  authWindow = new BrowserWindow({
+    width: 340, height: 440,
+    center: true,
+    frame: true, transparent: false, alwaysOnTop: false,
+    resizable: false, minimizable: false,
+    title: 'Hyalos — Sign In',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  authWindow.loadFile(path.join(__dirname, 'renderer', 'auth.html'));
+  authWindow.on('closed', () => { authWindow = null; });
+}
+
+function createAdminWindow() {
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.focus();
+    return;
+  }
+  adminWindow = new BrowserWindow({
+    width: 700, height: 500,
+    center: true,
+    frame: true, transparent: false, alwaysOnTop: false,
+    resizable: true, minimizable: true,
+    title: 'Hyalos — Admin Dashboard',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  adminWindow.loadFile(path.join(__dirname, 'renderer', 'admin.html'));
+  adminWindow.on('closed', () => { adminWindow = null; });
+}
+
 function createTray() {
   tray = new Tray(path.join(__dirname, 'assets', 'tray-icon.png'));
   tray.setToolTip('Hyalos — Usage Glass');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show/Hide', click: () => mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show() },
+    { label: 'Show/Hide', click: () => mainWindow && (mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()) },
     { label: 'Refresh', click: () => refreshUsage() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]));
 }
 
+// ============ APP STARTUP ============
+
 let clickThrough = false;
 
-app.whenReady().then(async () => {
-  createWindow();
+async function startApp() {
   createTray();
+
+  // Try to restore auth
+  const savedToken = loadToken();
+  if (savedToken) {
+    const valid = await validateToken(savedToken);
+    if (valid) {
+      openOverlay();
+      return;
+    }
+  }
+
+  // No valid token — show auth window
+  createAuthWindow();
+}
+
+function openOverlay() {
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.close();
+    authWindow = null;
+  }
+
+  createWindow();
 
   mainWindow.webContents.on('did-finish-load', async () => {
     sendAllData();
@@ -317,6 +496,7 @@ app.whenReady().then(async () => {
   });
 
   // Cmd+Shift+U — show/hide overlay
+  try { globalShortcut.unregisterAll(); } catch {}
   globalShortcut.register('CommandOrControl+Shift+U', () => {
     if (mainWindow.isVisible()) mainWindow.hide();
     else mainWindow.show();
@@ -332,19 +512,99 @@ app.whenReady().then(async () => {
 
   setInterval(refreshUsage, 60000);
   setInterval(sendAllData, 5000);
-});
+}
 
-ipcMain.on('close-app', () => mainWindow.hide());
+app.whenReady().then(startApp);
+
+// ============ IPC: EXISTING ============
+
+ipcMain.on('close-app', () => { if (mainWindow) mainWindow.hide(); });
 ipcMain.on('refresh-data', () => refreshUsage());
 ipcMain.on('toggle-expand', (_event, expanded) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   const [x, y] = mainWindow.getPosition();
   const [w] = mainWindow.getSize();
   mainWindow.setBounds({ x, y, width: w, height: expanded ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT }, true);
 });
 ipcMain.on('toggle-pin', (event) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   const pinned = mainWindow.isAlwaysOnTop();
   mainWindow.setAlwaysOnTop(!pinned);
   event.reply('pin-status', !pinned);
 });
+
+// ============ IPC: AUTH ============
+
+ipcMain.handle('login', async (_event, email, password) => {
+  const res = await apiRequest('POST', '/auth/login', { email, password });
+  if (res.token) {
+    authToken = res.token;
+    currentUser = res.user;
+    saveToken(authToken);
+    openOverlay();
+    return { user: res.user };
+  }
+  return { error: res.error || 'Login failed' };
+});
+
+ipcMain.handle('register', async (_event, email, password, name) => {
+  const res = await apiRequest('POST', '/auth/register', { email, password, name });
+  if (res.token) {
+    authToken = res.token;
+    currentUser = res.user;
+    saveToken(authToken);
+    openOverlay();
+    return { user: res.user };
+  }
+  return { error: res.error || 'Registration failed' };
+});
+
+ipcMain.handle('logout', async () => {
+  clearToken();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+  if (adminWindow && !adminWindow.isDestroyed()) adminWindow.close();
+  mainWindow = null;
+  createAuthWindow();
+  return { ok: true };
+});
+
+ipcMain.handle('getAuthState', async () => {
+  return { loggedIn: !!authToken, user: currentUser };
+});
+
+// ============ IPC: TEAMS ============
+
+ipcMain.handle('getMyTeams', async () => {
+  const res = await apiRequest('GET', '/teams/mine', null, authToken);
+  return res.teams || [];
+});
+
+ipcMain.handle('createTeam', async (_event, name) => {
+  const res = await apiRequest('POST', '/teams', { name }, authToken);
+  return res.team ? { team: res.team } : { error: res.error || 'Failed' };
+});
+
+ipcMain.handle('joinTeam', async (_event, code) => {
+  const res = await apiRequest('POST', '/teams/join', { code }, authToken);
+  return res.team ? { team: res.team } : { error: res.error || 'Failed' };
+});
+
+ipcMain.handle('getTeamMembers', async (_event, teamId) => {
+  const res = await apiRequest('GET', `/teams/${teamId}/members`, null, authToken);
+  return res.members || [];
+});
+
+// ============ IPC: NAV ============
+
+ipcMain.handle('openAdmin', () => {
+  createAdminWindow();
+  return { ok: true };
+});
+
+// ============ APP LIFECYCLE ============
+
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (mainWindow) mainWindow.show(); });
+app.on('activate', () => {
+  if (mainWindow) mainWindow.show();
+  else if (authWindow) authWindow.show();
+});
