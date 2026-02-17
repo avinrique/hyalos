@@ -430,20 +430,54 @@ document.getElementById('dropdown-admin').addEventListener('click', () => {
   userDropdown.classList.remove('open');
 });
 
-document.getElementById('dropdown-create-team').addEventListener('click', async () => {
-  const name = prompt('Team name:');
-  if (!name) return;
-  const res = await window.electronAPI.createTeam(name);
-  if (res.error) alert(res.error);
-  else loadUserMenu();
+// Inline input helper — replaces prompt() which doesn't work in frameless Electron windows
+function showInlineInput(buttonEl, placeholder, onSubmit) {
+  // Don't create duplicate inputs
+  if (buttonEl.nextElementSibling?.classList.contains('dropdown-inline-form')) return;
+
+  const form = document.createElement('div');
+  form.className = 'dropdown-inline-form';
+  form.innerHTML = `<input class="dropdown-inline-input" type="text" placeholder="${placeholder}" autocomplete="off">
+    <div class="dropdown-inline-btns">
+      <button class="dropdown-inline-ok">OK</button>
+      <button class="dropdown-inline-cancel">Cancel</button>
+    </div>
+    <div class="dropdown-inline-error"></div>`;
+  buttonEl.after(form);
+
+  const input = form.querySelector('input');
+  const errorEl = form.querySelector('.dropdown-inline-error');
+  input.focus();
+
+  const submit = async () => {
+    const val = input.value.trim();
+    if (!val) { errorEl.textContent = 'Cannot be empty'; return; }
+    errorEl.textContent = '';
+    form.querySelector('.dropdown-inline-ok').textContent = '...';
+    const result = await onSubmit(val);
+    if (result?.error) {
+      errorEl.textContent = result.error;
+      form.querySelector('.dropdown-inline-ok').textContent = 'OK';
+    } else {
+      form.remove();
+      loadUserMenu();
+    }
+  };
+
+  form.querySelector('.dropdown-inline-ok').addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+    if (e.key === 'Escape') form.remove();
+  });
+  form.querySelector('.dropdown-inline-cancel').addEventListener('click', () => form.remove());
+}
+
+document.getElementById('dropdown-create-team').addEventListener('click', function () {
+  showInlineInput(this, 'Team name', (name) => window.electronAPI.createTeam(name));
 });
 
-document.getElementById('dropdown-join-team').addEventListener('click', async () => {
-  const code = prompt('Enter invite code:');
-  if (!code) return;
-  const res = await window.electronAPI.joinTeam(code);
-  if (res.error) alert(res.error);
-  else loadUserMenu();
+document.getElementById('dropdown-join-team').addEventListener('click', function () {
+  showInlineInput(this, 'Invite code', (code) => window.electronAPI.joinTeam(code));
 });
 
 // ============ GHOST MODE ============
